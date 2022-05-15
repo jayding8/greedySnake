@@ -1,6 +1,7 @@
 import Vue from 'vue'
 import VueRouter, { RouteConfig } from 'vue-router'
-import Home from '../views/Home.vue'
+import Home from '@/views/Home.vue'
+import GreedySnake from '@/views/greedySnake.vue'
 
 Vue.use(VueRouter)
 
@@ -8,7 +9,14 @@ const routes: Array<RouteConfig> = [
   {
     path: '/',
     name: 'Home',
-    component: Home
+    component: Home,
+    children: [
+      {
+        path: 'greedySnake',
+        name: 'greedySnake',
+        component: GreedySnake,
+      },
+    ]
   }
 ]
 

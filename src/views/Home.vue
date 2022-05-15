@@ -1,29 +1,12 @@
 <template>
   <div class="main">
-    <div class="main-title">贪吃蛇</div>
-    <div class="main-body">
-      <div class="game" ref="game">
-        <div class="snake">
-          <div
-            v-for="(item, index) in snake"
-            :key="index"
-            :style="{ left: item[0] + 'px', top: item[1] + 'px' }"
-          ></div>
+    <div id="container">
+      <div id="container_left"></div>
+      <div class="container_right">
+        <div class="container_right_header">
+          <span @click.stop="saveData">保存</span>
         </div>
-        <div
-          class="food"
-          :style="{ left: foodX + 'px', top: foodY + 'px' }"
-        ></div>
-      </div>
-      <div class="score">
-        <div>
-          <span>SCORE:</span>
-          <span>{{score}}</span>
-        </div>
-        <div>
-          <span>LEVEL:</span>
-          <span>{{level}}</span>
-        </div>
+        <div id="container_body"></div>
       </div>
     </div>
   </div>
@@ -32,216 +15,258 @@
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
 // import _ from 'lodash'
+import { Graph, Addon, Shape } from "@antv/x6";
 
-const ARROWUP = "ArrowUp";
-const ARROWRIGHT = "ArrowRight";
-const ARROWDOWN = "ArrowDown";
-const ARROWLEFT = "ArrowLeft";
-const BASESIZE = 20;  // 默认单位大小，px
-const BASESCORE = 2; // 单个食物得分
-const UPLEVELNUM = 8; // 获取多少食物后升级
-
+const DATA = {
+  // 节点
+  nodes: [
+    {
+      id: "node1", // String，可选，节点的唯一标识
+      x: 40, // Number，必选，节点位置的 x 值
+      y: 40, // Number，必选，节点位置的 y 值
+      width: 80, // Number，可选，节点大小的 width 值
+      height: 40, // Number，可选，节点大小的 height 值
+      label: "hello", // String，节点标签
+    },
+    {
+      id: "node2", // String，节点的唯一标识
+      x: 160, // Number，必选，节点位置的 x 值
+      y: 180, // Number，必选，节点位置的 y 值
+      width: 80, // Number，可选，节点大小的 width 值
+      height: 40, // Number，可选，节点大小的 height 值
+      label: "world", // String，节点标签
+    },
+  ],
+  // 边
+  edges: [
+    {
+      source: "node1", // String，必须，起始节点 id
+      target: "node2", // String，必须，目标节点 id
+    },
+  ],
+};
+const SCALE_STEP = 0.1;
 @Component({})
 export default class Home extends Vue {
-  mounted(): void {
-    // 添加监听键盘事件
-    this.initGame();
-    this._initProgram()
-  }
-  _initProgram():void {
-    this.forbidenDirection = ''
-    // 初始化游戏
-    this.initGameArea();
-    // 初始化蛇
-    this.initSnake();
-    // 初始化食物
-    this.initFood();
-    // 初始化计分板
-    this.initScore();
-  }
+  graph: any;
 
-  // 游戏控制
-  offsetWidth = 0;
-  offsetHeight = 0;
-  initGameArea(): void {
-    let gameHtml = this.$refs.game as HTMLElement;
-    this.offsetWidth = gameHtml.offsetWidth;
-    this.offsetHeight = gameHtml.offsetHeight;
+  mounted(): void {
+    // 初始化画布
+    this.initGraph();
+    // 自定义默认node配置
+    this.initMyRectNode();
+    // 初始化左侧 预置node
+    this.initStencil();
+    // 初始化画布数据
+    this.drawGraph();
   }
-  forbidenDirection = "";
-  initGame(): void {
-    document.addEventListener("keydown", (e) => {
-      if (e.key === this.forbidenDirection) {
-        this.$message.warning("亲，不能掉头哦！！！");
-        return;
-      }
-      let x = 0;
-      let y = 0;
-      let flag = false;
-      switch (e.key) {
-        case ARROWUP:
-          this.forbidenDirection = ARROWDOWN;
-          y -= BASESIZE;
-          flag = true;
-          break;
-        case ARROWRIGHT:
-          this.forbidenDirection = ARROWLEFT;
-          x += BASESIZE;
-          flag = true;
-          break;
-        case ARROWDOWN:
-          this.forbidenDirection = ARROWUP;
-          y += BASESIZE;
-          flag = true;
-          break;
-        case ARROWLEFT:
-          this.forbidenDirection = ARROWRIGHT;
-          x -= BASESIZE;
-          flag = true;
-          break;
-      }
-      if (flag) {
-        this.snakeMove(x, y);
-      }
+  beforeDestroy() {
+    this.graph.dispose();
+  }
+  initGraph(): void {
+    this.graph = new Graph({
+      container: document.getElementById("container_body")!,
+      background: {
+        color: "#fffbe6", // 设置画布背景颜色
+      },
+      grid: {
+        size: 10, // 网格大小 10px
+        visible: true, // 渲染网格背景
+      },
+      panning: {
+        enabled: true, // 画布平移
+      },
+      translating: {
+        restrict: true, // 节点不能移动超出画布区域
+      },
+      snapline: true,
+      connecting: {
+        snap: {
+          radius: 30, // 连线的过程中距离节点或者连接桩 30px 时会触发自动吸附
+        },
+        allowBlank: false, // 是否允许连接到画布空白位置的点
+        // highlight: true,
+        validateConnection({ sourceCell, targetCell }) {
+          console.log(sourceCell?.data.type);
+          console.log(targetCell?.data.type);
+          return true;
+        },
+        router: {
+          name: "manhattan",
+        },
+      },
+    });
+
+    this.graph.on("cell:click", (res: any) => {
+      let {cell, e} = res
+      console.log(res);
+
+    });
+
+    this.graph.on("cell:dblclick", (res: any) => {
+      let {cell, e} = res
+      console.log(2,cell, e);
+
+      const isNode = cell.isNode();
+      const isEdge = cell.isEdge();
+      console.log(isNode, isEdge);
+
     });
   }
-  // 蛇
-  snake: number[][] = [];
-  time = 0;
-  speed = 500
-  initSnake(): void {
-    this.snake = [[0, 0]];
-    this.speed = 500
+  initStencil() {
+    const stencil = new Addon.Stencil({
+      target: this.graph,
+      // validateNode(node, options) {
+      //   console.log(node, options);
+      //   return true;
+      // },
+      stencilGraphWidth: 300,
+      stencilGraphHeight: 300,
+      groups: [{ name: "basic", title: "基础节点" }],
+    });
+    document.getElementById("container_left")!.appendChild(stencil.container);
+    stencil.load(
+      [
+        this._getGraphNode({
+          nodeType: "my-rect",
+          label: "卡片",
+          type: "card",
+        }),
+        this._getGraphNode({
+          nodeType: "my-rect",
+          label: "指标",
+          type: "indicator",
+        }),
+        this._getGraphNode({
+          nodeType: "my-rect",
+          label: "OLAP",
+          type: "olap",
+        }),
+        this._getGraphNode({
+          nodeType: "my-rect",
+          label: "数据源",
+          type: "datasource",
+        }),
+      ],
+      "basic"
+    );
   }
-  snakeMove(x: number, y: number): void {
-    if (this.time) {
-      clearTimeout(this.time);
+  initMyRectNode() {
+    Shape.Rect.define({
+      shape: "my-rect",
+      width: 180,
+      height: 80,
+      ports: {
+        groups: {
+          top: {
+            position: "top",
+            label: {
+              position: "top",
+            },
+            attrs: {
+              circle: {
+                r: 3,
+                magnet: true,
+                stroke: "#31d0c6",
+                strokeWidth: 2,
+                fill: "#fff",
+              },
+            },
+          },
+          bottom: {
+            position: "bottom",
+            label: {
+              position: "bottom",
+            },
+            attrs: {
+              circle: {
+                r: 3,
+                magnet: true,
+                stroke: "#31d0c6",
+                strokeWidth: 2,
+                fill: "#fff",
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+  drawGraph(): void {
+    if (sessionStorage.getItem("hahaha")) {
+      this.graph.fromJSON(JSON.parse(sessionStorage.getItem("hahaha")!));
     }
-    let snakeHead = this.snake[0];
-    let newSnakeHead = [snakeHead[0] + x, snakeHead[1] + y];
-    if (
-      newSnakeHead[0] < 0 ||
-      newSnakeHead[0] > this.offsetWidth ||
-      newSnakeHead[1] < 0 ||
-      newSnakeHead[1] > this.offsetHeight
-    ) {
-      this.$message.error("啊哦，你撞墙了！！！");
-      this._initProgram()
-      return;
-    }
-    if (this.checkRepeat(newSnakeHead[0], newSnakeHead[1])) {
-      this.$message.error("啊哦，你撞到自己了！！！");
-      this._initProgram()
-      return;
-    }
-    this.snake.unshift(newSnakeHead);
-    if (newSnakeHead[0] === this.foodX && newSnakeHead[1] === this.foodY) {
-      this.createFood();
-      if(!this.addScore()) {
-        this.$message.success("恭喜，您已通关!!!");
-        this._initProgram()
-        return;
-      }
-    } else {
-      this.snake.pop();
-    }
-    this.time = setTimeout(() => this.snakeMove(x, y), this.speed);
+    // this.graph.fromJSON(DATA);
   }
-  checkRepeat(x: number, y: number): boolean {
-    let repeat = this.snake.find((item) => item[0] === x && item[1] === y);
-    return repeat ? true : false;
-  }
-  // 食物
-  foodX = 0;
-  foodY = 0;
-  initFood(): void {
-    this.createFood();
-  }
-  createFood(): void {
-    this.foodX =
-      Math.round(Math.random() * Math.floor(this.offsetWidth / BASESIZE)) *
-      BASESIZE;
-    this.foodY =
-      Math.round(Math.random() * Math.floor(this.offsetHeight / BASESIZE)) *
-      BASESIZE;
-    if (this.checkRepeat(this.foodX, this.foodY)) {
-      this.createFood();
-    }
-  }
-  // 计分板：分数和等级
-  score = 0
-  level = 1
-  initScore():void {
-    this.score = 0
-    this.level = 1
-  }
-  addScore():boolean {
-    this.score += BASESCORE
-    let foodNum = this.score / BASESCORE
-    if (foodNum >= UPLEVELNUM){
-      if(foodNum / UPLEVELNUM >= 3 ){
-        return false
-      }
-      if(foodNum == UPLEVELNUM || foodNum == UPLEVELNUM * 2){
-        this.$message.success("恭喜您，升级啦！");
-        this.level += 1
-        this.speed -= 100
-      }
+  _getGraphNode(attr: { nodeType: string; label: string; type: string }) {
+    return this.graph.createNode({
+      shape: attr.nodeType,
+      x: 40, // Number，必选，节点位置的 x 值
+      y: 40, // Number，必选，节点位置的 y 值
+      width: 80, // Number，可选，节点大小的 width 值
+      height: 40, // Number，可选，节点大小的 height 值
+      label: attr.label, // String，节点标签
+      ports: [
+        {
+          group: "top", // 指定分组名称
+        },
+        {
+          group: "top", // 指定分组名称
+        },
+        {
+          group: "bottom", // 指定分组名称
+        },
+      ],
+      data: { type: attr.type },
+    });
 
-    }
-    return true
+    // return this.graph.createNode({
+    //   shape: attr.nodeType,
+    //   x: 40, // Number，必选，节点位置的 x 值
+    //   y: 40, // Number，必选，节点位置的 y 值
+    //   width: 80, // Number，可选，节点大小的 width 值
+    //   height: 40, // Number，可选，节点大小的 height 值
+    //   label: "hello", // String，节点标签
+    // });
+  }
+
+  // 画布缩放
+  zoomGraph(flag: string): void {
+    this.graph.zoom(flag === "up" ? SCALE_STEP : -SCALE_STEP);
+  }
+
+  saveData() {
+    console.log(this.graph.toJSON());
+    sessionStorage.setItem("hahaha", JSON.stringify(this.graph.toJSON()));
   }
 }
 </script>
-<style lang="scss" scoped>
+<style lang="scss" scope>
+.x6-port-body {
+  opacity: 0;
+}
+.x6-node:hover .x6-port-body {
+  opacity: 1;
+}
 .main {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   height: 100%;
-  .main-title {
-    font-size: 20px;
-    font-weight: 600;
-  }
-  .main-body {
-    width: 90%;
-    height: 90%;
-    background-color: #b7d4a8;
-    border: 10px solid #000;
-    border-radius: 10px;
-    .game {
-      width: 100%;
-      height: 90%;
-      border-bottom: 2px solid #000;
+  #container {
+    display: flex;
+    height: 100%;
+    #container_left {
+      width: 300px;
+      height: 100%;
       position: relative;
-      .snake {
-        :first-child {
-          background: url("~@/assets/imgs/snake.jpeg") no-repeat center;
-          background-size: 300%;
-        }
-        > div {
-          width: 20px;
-          height: 20px;
-          background: rgb(73, 176, 163);
-          border: 1px solid #b7d4a8;
-          box-sizing: border-box;
-          position: absolute;
-        }
-      }
-      .food {
-        background-color: rgb(226, 40, 27);
-        width: 20px;
-        height: 20px;
-        position: absolute;
-      }
     }
-    .score {
-      width: 100%;
-      height: 10%;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-      font-size: 16px;
+    .container_right {
+      width: calc(100% - 300px);
+      height: 100%;
+      .container_right_header {
+        height: 50px;
+      }
+      #container_body {
+        height: calc(100% - 50px);
+      }
     }
   }
 }
